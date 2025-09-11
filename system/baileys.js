@@ -5,6 +5,7 @@ const chalk = require("chalk");
 const pino = require("pino");
 const simple = require("./simple.js");
 const { smsg } = require("./serialize");
+const readline = require('readline')
 
 class BaileysBot extends EventEmitter {
     constructor(config) {
