@@ -2,7 +2,7 @@
   "name": "@kelvdra/rapthalia-js",
   "description": "Modules Only for Rapthalia MD",
   "author": "kelvdra",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -37,6 +37,7 @@
 	 "got": "^11.8.2",
      "pdfkit": "^0.14.0",
      "qs": "^6.11.2",
+	 "readline": "^1.3.0",
      "stream": "*",
      "undici": "*",
      "url-pattern" : "*",
