@@ -2,13 +2,14 @@
   "name": "@kelvdra/rapthalia-js",
   "description": "Modules Only for Rapthalia MD",
   "author": "kelvdra",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "dependencies": { 
+	 "@kelvdra/bails": "latest",
      "awesome-phonenumber": "^2.73.0",
      "axios": "^0.27.2",
      "cheerio": "npm:@kelvdra/cheerio",
