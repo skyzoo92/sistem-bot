@@ -221,7 +221,7 @@ class BaileysBot extends EventEmitter {
           ? chatUpdate.message.ephemeralMessage.message
           : chatUpdate.message;
 
-      let m = await smsg(chatUpdate, this.conn, this.store);
+      let m = await simple.smsg(this.conn, chatUpdate, this.config.store);
 
       if (m.isBaileys) return;
 
