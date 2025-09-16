@@ -12,8 +12,6 @@ const {
   DisconnectReason
 } = require("@kelvdra/bails");
 
-const { smsg } = require("./serialize"); // kalau kamu punya helper smsg
-
 class BaileysBot extends EventEmitter {
   constructor(config) {
     super();
