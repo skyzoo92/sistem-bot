@@ -183,7 +183,7 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
         let res, filename
         const data = Buffer.isBuffer(PATH) ? PATH : /^data:.*?\/.*?;base64,/i.test(PATH) ? Buffer.from(PATH.split`,`[1], 'base64') : /^https?:\/\//.test(PATH) ? await (res = await fetch(PATH)).buffer() : fs.existsSync(PATH) ? (filename = PATH, fs.readFileSync(PATH)) : typeof PATH === 'string' ? PATH : Buffer.alloc(0)
         if (!Buffer.isBuffer(data)) throw new TypeError('Result is not a buffer')
-        const type = await FileType.fromBuffer(data) || {
+        const type = await FileType.fileTypeFromBuffer(data) || {
             mime: 'application/octet-stream',
             ext: '.bin'
         }
@@ -266,6 +266,129 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
     conn.rand = async (isi) => {
         return isi[Math.floor(Math.random() * isi.length)]
     }
+    conn.sendButton = async (jid, array, quoted, json = {}, options = {}) => {
+    const result = [];
+    for (const pair of array) {
+      const obj = {
+        name: "quick_reply",
+        buttonParamsJson: JSON.stringify({
+          display_text: pair[0],
+          id: pair[1],
+        }),
+      };
+      result.push(obj);
+    }
+
+    if (json.url) {
+        let file = await conn.getFile(json.url);
+        let mime = file.mime.split("/")[0];
+        let msg = generateWAMessageFromContent(
+            jid, {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2,
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: json.body,
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: json.footer,
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                hasMediaAttachment: true,
+                                   ...(await prepareWAMessageMedia({
+                                ...(file.mime.split("/")[0] === "image" ?  {
+                                     image: file.data,
+                                                                
+                                 } : file.mime.split("/")[0] === "video" ?  {
+                                     video: file.data,
+                                     
+                                 } : {
+                                     document: file.data,
+                                     mimetype: file.mime,
+                                     fileName: json.filename || "Rapthalia." + extension(file.mime)             
+                                 })
+                               }, {
+                                   upload: conn.waUploadToServer
+                               })),
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: result,
+                            }),
+                            ...(options ? options : {
+                                contextInfo: {
+                                    mentionedJid: [
+                                        ...conn.parseMention(json.body),
+                                        ...conn.parseMention(json.footer),
+                                    ],
+                                },
+                            }),
+                        }),
+                    },
+                },
+            }, {
+                userJid: conn.user.jid,
+                quoted: quoted, 
+                upload: conn.waUploadToServer,
+                ...ephemeral,
+            },
+        );
+
+        return conn.relayMessage(msg.key.remoteJid, msg.message, {
+            messageId: msg.key.id,
+        });
+    } else {
+        let msg = generateWAMessageFromContent(
+            jid, {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadata: {},
+                            deviceListMetadataVersion: 2,
+                        },
+                        interactiveMessage: proto.Message.InteractiveMessage.create({
+                            body: proto.Message.InteractiveMessage.Body.create({
+                                text: json.body,
+                            }),
+                            footer: proto.Message.InteractiveMessage.Footer.create({
+                                text: json.footer,
+                            }),
+                            header: proto.Message.InteractiveMessage.Header.create({
+                                hasMediaAttachment: false,
+                            }),
+                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                                buttons: result || [{
+                                    text: ""
+                                }],
+                            }),
+                            ...(options ? options : {
+                                contextInfo: {
+                                    mentionedJid: [
+                                        ...conn.parseMention(json.body),
+                                        ...conn.parseMention(json.footer),
+                                    ],
+                                },
+                            }),
+                        }),
+                    },
+                },
+            }, {
+                userJid: conn.user.jid,
+                quoted: quoted, 
+
+                upload: conn.waUploadToServer,
+                ...ephemeral,
+            },
+        );
+       conn.relayMessage(msg.key.remoteJid, msg.message, {
+            messageId: msg.key.id,
+        });
+        return msg
+    }
+  };
  conn.textList = async function (jid, text, image, list = [], m, options = {}, smlcap = { smlcap: true }) {
   if (!Array.isArray(list)) list = [];
 
@@ -816,7 +939,7 @@ END:VCARD
         for await(const chunk of stream) {
             buffer = Buffer.concat([buffer, chunk])
         }
-	let type = await FileType.fromBuffer(buffer)
+	let type = await FileType.fileTypeFromBuffer(buffer)
         trueFileName = attachExtension ? (filename + '.' + type.ext) : filename
         // save to file
         await fs.writeFileSync(trueFileName, buffer)
@@ -1082,7 +1205,7 @@ conn.getFile = async (path) => {
 
   if (!Buffer.isBuffer(data)) throw new TypeError('Result is not a buffer')
 
-  let type = await FileType.fromBuffer(data) || {
+  let type = await FileType.fileTypeFromBuffer(data) || {
     mime: 'application/octet-stream',
     ext: '.bin'
   }
