@@ -1,37 +1,28 @@
-name: Publish Package
+name: Publish NPM Package
 
 on:
   push:
     tags:
       - 'v*'
 
-permissions:
-  contents: read
-  packages: write
-  id-token: write
-
 jobs:
   publish:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: 20
-          scope: '@kelvdra'
-
-      - name: Enable Corepack
-        run: corepack enable
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org/'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: npm install
 
-      # 👉 Publish to npmjs.org (tanpa provenance, supaya repo private tetap bisa)
-      - name: Publish to npmjs.org
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-          npm publish --registry=https://registry.npmjs.org/
+      - name: Publish to NPM
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
