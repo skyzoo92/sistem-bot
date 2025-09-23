@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const fetch = require("node-fetch");
 const { ffmpeg } = require("./converter");
 const { spawn } = require("child_process");
-const { fromBuffer } = require("file-type");
+const { fileTypeFromBuffer } = require("file-type");
 
 const tmp = path.join(__dirname, "../tmp");
 /**
