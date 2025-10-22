@@ -2,7 +2,7 @@
   "name": "@kelvdra/rapthalia-js",
   "description": "Modules Only for Rapthalia MD By Kelvdra",
   "author": "kelvdra",
-  "version": "1.0.6-beta",
+  "version": "1.0.6-beta.1",
   "main": "index.js",
   "files": [
     "index.js",
