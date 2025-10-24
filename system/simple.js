@@ -1,19 +1,3 @@
-const {
-    default: makeWASocket,
-    makeWALegacySocket,
-    extractMessageContent,
-    proto,
-    prepareWAMessageMedia,
-    generateWAMessage,
-    downloadContentFromMessage,
-    getBinaryNodeChild,
-    jidDecode,
-    areJidsSameUser,
-    generateForwardMessageContent,
-    generateWAMessageFromContent,
-    WAMessageStubType,
-    WA_DEFAULT_EPHEMERAL,
-} = require('@kelvdra/bails')
 const { toAudio, toPTT, toVideo } = require('./converter')
 const chalk = require('chalk')
 const fetch = require('node-fetch')
@@ -24,7 +8,6 @@ const path = require('path')
 let { Jimp } = require('jimp')
 const pino = require('pino')
 const crypto = require('crypto')
-//const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) })
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./exif')
 const ephemeral = { ephemeralExpiration: 8600 }
 
@@ -32,22 +15,8 @@ function toSHA256(str) {
     return crypto.createHash('sha256').update(str).digest('hex')
 }
 
-exports.makeWASocket = (connectionOptions, options = {}) => {
-    let conn = (global.opts['legacy'] ? makeWALegacySocket : makeWASocket)(connectionOptions)
-    // conn.ws.on('CB:stream:error', (stream) => {
-    //     const { code } = stream || {}
-    //     if (code == '401') conn.ev.emit('connection.update', {
-    //         connection: 'logged Out',
-    //         lastDisconnect: {
-    //             error: {
-    //                 output: {
-    //                     statusCode: DisconnectReason.loggedOut
-    //                 }
-    //             },
-    //             date: new Date()
-    //         }
-    //     })
-    // })
+exports.makeWASocket = (connectionOptions, options = {}, config) => {
+    let conn = (global.opts['legacy'] ? config.makeWALegacySocket : config.makeWASocket)(connectionOptions)
     
     // Load Group Message
     conn.loadAllMessages = (messageID) => {
@@ -61,7 +30,7 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
     conn.decodeJid = (jid) => {
         if (!jid) return jid
         if (/:\d+@/gi.test(jid)) {
-            const decode = jidDecode(jid) || {}
+            const decode = config.jidDecode(jid) || {}
             return decode.user && decode.server && decode.user + '@' + decode.server || jid
         } else return jid
     }
@@ -282,7 +251,7 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
     if (json.url) {
         let file = await conn.getFile(json.url);
         let mime = file.mime.split("/")[0];
-        let msg = generateWAMessageFromContent(
+        let msg = config.generateWAMessageFromContent(
             jid, {
                 viewOnceMessage: {
                     message: {
@@ -290,16 +259,16 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
                             deviceListMetadata: {},
                             deviceListMetadataVersion: 2,
                         },
-                        interactiveMessage: proto.Message.InteractiveMessage.create({
-                            body: proto.Message.InteractiveMessage.Body.create({
+                        interactiveMessage: config.proto.Message.InteractiveMessage.create({
+                            body: config.proto.Message.InteractiveMessage.Body.create({
                                 text: json.body,
                             }),
-                            footer: proto.Message.InteractiveMessage.Footer.create({
+                            footer: config.proto.Message.InteractiveMessage.Footer.create({
                                 text: json.footer,
                             }),
-                            header: proto.Message.InteractiveMessage.Header.create({
+                            header: config.proto.Message.InteractiveMessage.Header.create({
                                 hasMediaAttachment: true,
-                                   ...(await prepareWAMessageMedia({
+                                   ...(await config.prepareWAMessageMedia({
                                 ...(file.mime.split("/")[0] === "image" ?  {
                                      image: file.data,
                                                                 
@@ -315,7 +284,7 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
                                    upload: conn.waUploadToServer
                                })),
                             }),
-                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            nativeFlowMessage: config.proto.Message.InteractiveMessage.NativeFlowMessage.create({
                                 buttons: result,
                             }),
                             ...(options ? options : {
@@ -341,7 +310,7 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
             messageId: msg.key.id,
         });
     } else {
-        let msg = generateWAMessageFromContent(
+        let msg = config.generateWAMessageFromContent(
             jid, {
                 viewOnceMessage: {
                     message: {
@@ -349,17 +318,17 @@ exports.makeWASocket = (connectionOptions, options = {}) => {
                             deviceListMetadata: {},
                             deviceListMetadataVersion: 2,
                         },
-                        interactiveMessage: proto.Message.InteractiveMessage.create({
-                            body: proto.Message.InteractiveMessage.Body.create({
+                        interactiveMessage: config.proto.Message.InteractiveMessage.create({
+                            body: config.proto.Message.InteractiveMessage.Body.create({
                                 text: json.body,
                             }),
-                            footer: proto.Message.InteractiveMessage.Footer.create({
+                            footer: config.proto.Message.InteractiveMessage.Footer.create({
                                 text: json.footer,
                             }),
-                            header: proto.Message.InteractiveMessage.Header.create({
+                            header: config.proto.Message.InteractiveMessage.Header.create({
                                 hasMediaAttachment: false,
                             }),
-                            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                            nativeFlowMessage: config.proto.Message.InteractiveMessage.NativeFlowMessage.create({
                                 buttons: result || [{
                                     text: ""
                                 }],
@@ -469,7 +438,7 @@ ${text}
 
 
   conn.preSudo = async function (text, who, m, chatupdate) {
-  let messages = await generateWAMessage(m.chat, {
+  let messages = await config.generateWAMessage(m.chat, {
     text,
     mentions: await conn.parseMention(text)
   }, {
@@ -477,7 +446,7 @@ ${text}
     quoted: m.quoted && m.quoted.fakeObj
   });
 
-  messages.key.fromMe = areJidsSameUser(who, conn.user.id);
+  messages.key.fromMe = config.areJidsSameUser(who, conn.user.id);
   messages.key.id = m.key.id;
   messages.pushName = m.name;
 
@@ -485,7 +454,7 @@ ${text}
 
   let msg = {
     ...chatupdate,
-    messages: [proto.WebMessageInfo.fromObject(messages)].map(v => ((v.conn = this), v)),
+    messages: [config.proto.WebMessageInfo.fromObject(messages)].map(v => ((v.conn = this), v)),
     type: "append"
   };
 
@@ -705,7 +674,7 @@ END:VCARD
       : null;
 
     if (mediaPayload) {
-      let msg = generateWAMessageFromContent(
+      let msg = config.generateWAMessageFromContent(
         jid,
         {
           viewOnceMessage: {
@@ -714,18 +683,18 @@ END:VCARD
                 deviceListMetadata: {},
                 deviceListMetadataVersion: 2,
               },
-              interactiveMessage: proto.Message.InteractiveMessage.create({
-                body: proto.Message.InteractiveMessage.Body.create({
+              interactiveMessage: config.proto.Message.InteractiveMessage.create({
+                body: config.proto.Message.InteractiveMessage.Body.create({
                   text: json.body || "",
                 }),
-                footer: proto.Message.InteractiveMessage.Footer.create({
+                footer: config.proto.Message.InteractiveMessage.Footer.create({
                   text: json.footer || "",
                 }),
-                header: proto.Message.InteractiveMessage.Header.create({
+                header: config.proto.Message.InteractiveMessage.Header.create({
                   hasMediaAttachment: true,
-                  ...(await prepareWAMessageMedia(mediaPayload, { upload: conn.waUploadToServer })),
+                  ...(await config.prepareWAMessageMedia(mediaPayload, { upload: conn.waUploadToServer })),
                 }),
-                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+                nativeFlowMessage: config.proto.Message.InteractiveMessage.NativeFlowMessage.create({
                   buttons: result
                 }),
                 contextInfo: {
@@ -749,7 +718,7 @@ END:VCARD
   }
 
   // No media
-  let msg = generateWAMessageFromContent(
+  let msg = config.generateWAMessageFromContent(
     jid,
     {
       viewOnceMessage: {
@@ -758,17 +727,17 @@ END:VCARD
             deviceListMetadata: {},
             deviceListMetadataVersion: 2,
           },
-          interactiveMessage: proto.Message.InteractiveMessage.create({
-            body: proto.Message.InteractiveMessage.Body.create({
+          interactiveMessage: config.proto.Message.InteractiveMessage.create({
+            body: config.proto.Message.InteractiveMessage.Body.create({
               text: json.body || "",
             }),
-            footer: proto.Message.InteractiveMessage.Footer.create({
+            footer: config.proto.Message.InteractiveMessage.Footer.create({
               text: json.footer || "",
             }),
-            header: proto.Message.InteractiveMessage.Header.create({
+            header: config.proto.Message.InteractiveMessage.Header.create({
               hasMediaAttachment: false
             }),
-            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+            nativeFlowMessage: config.proto.Message.InteractiveMessage.NativeFlowMessage.create({
               buttons: result
             }),
             contextInfo: {
@@ -815,7 +784,7 @@ END:VCARD
     conn.decodeJid = (jid) => {
         if (!jid) return jid
         if (/:\d+@/gi.test(jid)) {
-            let decode = jidDecode(jid) || {}
+            let decode = config.jidDecode(jid) || {}
             return decode.user && decode.server && decode.user + '@' + decode.server || jid
         } else return jid
     }
@@ -842,8 +811,8 @@ END:VCARD
     * @returns 
     */
     conn.sendGroupV4Invite = async (jid, participant, inviteCode, inviteExpiration, groupName = 'unknown subject', caption = 'Invitation to join my WhatsApp group', options = {}) => {
-        let msg = proto.Message.fromObject({
-            groupInviteMessage: proto.GroupInviteMessage.fromObject({
+        let msg = config.proto.Message.fromObject({
+            groupInviteMessage: config.proto.GroupInviteMessage.fromObject({
                 inviteCode,
                 inviteExpiration: parseInt(inviteExpiration) || + new Date(new Date + (3 * 86400000)),
                 groupJid: jid,
@@ -883,8 +852,8 @@ END:VCARD
         if (copy.key.remoteJid.includes('@s.whatsapp.net')) sender = sender || copy.key.remoteJid
         else if (copy.key.remoteJid.includes('@broadcast')) sender = sender || copy.key.remoteJid
         copy.key.remoteJid = jid
-        copy.key.fromMe = areJidsSameUser(sender, conn.user.id) || false
-        return proto.WebMessageInfo.fromObject(copy)
+        copy.key.fromMe = config.areJidsSameUser(sender, conn.user.id) || false
+        return config.proto.WebMessageInfo.fromObject(copy)
     }
 
     /**
@@ -895,10 +864,10 @@ END:VCARD
      * @param {Object} options
      */
     conn.copyNForward = async (jid, message, forwardingScore = true, options = {}) => {
-        let m = generateForwardMessageContent(message, !!forwardingScore)
+        let m = config.generateForwardMessageContent(message, !!forwardingScore)
         let mtype = Object.keys(m)[0]
         if (forwardingScore && typeof forwardingScore == 'number' && forwardingScore > 1) m[mtype].contextInfo.forwardingScore += forwardingScore
-        m = generateWAMessageFromContent(jid, m, { ...options, userJid: conn.user.id })
+        m = config.generateWAMessageFromContent(jid, m, { ...options, userJid: conn.user.id })
         await conn.relayMessage(jid, m.message, { messageId: m.key.id, additionalAttributes: { ...options } })
         return m
     }
@@ -920,7 +889,7 @@ END:VCARD
      */
     conn.downloadM = async (m, type, saveToFile) => {
         if (!m || !(m.url || m.directPath)) return Buffer.alloc(0)
-        const stream = await downloadContentFromMessage(m, type)
+        const stream = await config.downloadContentFromMessage(m, type)
         let buffer = Buffer.from([])
         for await (const chunk of stream) {
             buffer = Buffer.concat([buffer, chunk])
@@ -934,7 +903,7 @@ END:VCARD
         let quoted = message.msg ? message.msg : message
         let mime = (message.msg || message).mimetype || ''
         let messageType = message.mtype ? message.mtype.replace(/Message/gi, '') : mime.split('/')[0]
-        const stream = await downloadContentFromMessage(quoted, messageType)
+        const stream = await config.downloadContentFromMessage(quoted, messageType)
         let buffer = Buffer.from([])
         for await(const chunk of stream) {
             buffer = Buffer.concat([buffer, chunk])
@@ -1016,7 +985,7 @@ END:VCARD
         else v = jid === '0@s.whatsapp.net' ? {
             jid,
             vname: 'WhatsApp'
-        } : areJidsSameUser(jid, conn.user.id) ?
+        } : config.areJidsSameUser(jid, conn.user.id) ?
             conn.user :
             (conn.chats[jid] || {})
         return (withoutContact ? '' : v.name) || v.subject || v.vname || v.notify || v.verifiedName || PhoneNumber('+' + jid.replace('@s.whatsapp.net', '')).getNumber('international')
@@ -1038,18 +1007,18 @@ END:VCARD
             conn.ev.emit('groups.update', [{ id: chat, ...update }])
         }
         switch (m.messageStubType) {
-            case WAMessageStubType.REVOKE:
-            case WAMessageStubType.GROUP_CHANGE_INVITE_LINK:
+            case config.WAMessageStubType.REVOKE:
+            case config.WAMessageStubType.GROUP_CHANGE_INVITE_LINK:
             emitGroupUpdate({ revoke: m.messageStubParameters[0] })
             break
-            case WAMessageStubType.GROUP_CHANGE_ICON:
+            case config.WAMessageStubType.GROUP_CHANGE_ICON:
             emitGroupUpdate({ icon: m.messageStubParameters[0] })
             break
             default: {
                 console.log({
                     messageStubType: m.messageStubType,
                     messageStubParameters: m.messageStubParameters,
-                    type: WAMessageStubType[m.messageStubType]
+                    type: config.WAMessageStubType[m.messageStubType]
                 })
                 break
             }
@@ -1069,21 +1038,6 @@ END:VCARD
         for (const group in groups) conn.chats[group] = { ...(conn.chats[group] || {}), id: group, subject: groups[group].subject, isChats: true, metadata: groups[group] }
             return conn.chats
     }
-    
-    /*conn.processMessageStubType = async (m) => {
-        if (!m.messageStubType) return
-        const mtype = Object.keys(m.message || {})[0]
-        const chat = conn.decodeJid(m.key.remoteJid || m.message[mtype] && m.message[mtype].groupId || '')
-        const isGroup = chat.endsWith('@g.us')
-        if (!isGroup) return
-        let chats = conn.chats[chat]
-        if (!chats) chats = conn.chats[chat] = { id: chat }
-        chats.isChats = true
-        const metadata = await conn.groupMetadata(chat).catch(_ => null)
-        if (!metadata) return
-        chats.subject = metadata.subject
-        chats.metadata = metadata
-    }*/
 
     /**
      * pushMessage
@@ -1098,9 +1052,8 @@ END:VCARD
         if (!Array.isArray(m)) m = [m]
             for (const message of m) {
                 try {
-                // if (!(message instanceof proto.WebMessageInfo)) continue // https://github.com/adiwajshing/Baileys/pull/696/commits/6a2cb5a4139d8eb0a75c4c4ea7ed52adc0aec20f
                 if (!message) continue
-                    if (message.messageStubType && message.messageStubType != WAMessageStubType.CIPHERTEXT) conn.processMessageStubType(message).catch(console.error)
+                    if (message.messageStubType && message.messageStubType != config.WAMessageStubType.CIPHERTEXT) conn.processMessageStubType(message).catch(console.error)
                         const _mtype = Object.keys(message.message || {})
                     const mtype = (!['senderKeyDistributionMessage', 'messageContextInfo'].includes(_mtype[0]) && _mtype[0]) ||
                     (_mtype.length >= 3 && _mtype[1] !== 'messageContextInfo' && _mtype[1]) ||
@@ -1133,7 +1086,7 @@ END:VCARD
                             const qM = {
                                 key: {
                                     remoteJid,
-                                    fromMe: areJidsSameUser(conn.user.jid, remoteJid),
+                                    fromMe: config.areJidsSameUser(conn.user.jid, remoteJid),
                                     id: context.stanzaId,
                                     participant,
                                 },
@@ -1172,8 +1125,8 @@ END:VCARD
                     if (['senderKeyDistributionMessage', 'messageContextInfo'].includes(mtype)) continue
                         chats.isChats = true
                     if (!chats.messages) chats.messages = {}
-                        const fromMe = message.key.fromMe || areJidsSameUser(sender || chat, conn.user.id)
-                    if (!['protocolMessage'].includes(mtype) && !fromMe && message.messageStubType != WAMessageStubType.CIPHERTEXT && message.message) {
+                        const fromMe = message.key.fromMe || config.areJidsSameUser(sender || chat, conn.user.id)
+                    if (!['protocolMessage'].includes(mtype) && !fromMe && message.messageStubType != config.WAMessageStubType.CIPHERTEXT && message.message) {
                         delete message.message.messageContextInfo
                         delete message.message.senderKeyDistributionMessage
                         chats.messages[message.key.id] = JSON.parse(JSON.stringify(message, null, 2))
@@ -1251,54 +1204,6 @@ conn.setBio = async (status) => {
         })
         // <iq to="s.whatsapp.net" type="set" xmlns="status" id="21168.6213-69"><status>"Hai, saya menggunakan WhatsApp"</status></iq>
     }
-
-
-    /*conn.pushMessage = async (m) => {
-        if (!m) return
-        if (!Array.isArray(m)) m = [m]
-        for (const message of m) {
-            try {
-                // if (!(message instanceof proto.WebMessageInfo)) continue // https://github.com/adiwajshing/Baileys/pull/696/commits/6a2cb5a4139d8eb0a75c4c4ea7ed52adc0aec20f
-                if (!message) continue
-                if (message.messageStubType) conn.processMessageStubType(message).catch(console.error)
-                let mtype = Object.keys(message.message || {})
-                mtype = mtype[mtype[0] === 'messageContextInfo' && mtype.length == 2 ? 1 : 0]
-                const chat = conn.decodeJid(message.key.remoteJid || message.message[mtype] && message.message[mtype].groupId || '')
-                const isGroup = chat.endsWith('@g.us')
-                let chats = conn.chats[chat]
-                if (!chats) {
-                    if (isGroup) {
-                        const groups = await conn.groupFetchAllParticipating().catch(_ => ({}))
-                        for (const group in groups) conn.chats[group] = { id: group, subject: groups[group].subject, isChats: true, metadata: groups[group] }
-                    }
-                    chats = conn.chats[chat] = { id: chat, ...(conn.chats[chat] || {}) }
-                }
-                let metadata, sender
-                if (isGroup) {
-                    if (!chats.subject || !chats.metadata) {
-                        metadata = await conn.groupMetadata(chat).catch(_ => ({})) || {}
-                        if (!chats.subject) chats.subject = metadata.subject || ''
-                        if (!chats.metadata) chats.metadata = metadata
-                    }
-                    sender = conn.decodeJid(message.fromMe && conn.user.id || message.participant || message.key.participant || chat || '')
-                    if (sender !== chat) {
-                        let chats = conn.chats[sender]
-                        if (!chats) chats = conn.chats[sender] = { id: sender }
-                        if (!chats.name) chats.name = message.pushName || chats.name || ''
-                    }
-                } else {
-                    if (!chats.name) chats.name = message.pushName || chats.name || ''
-                }
-                if (['senderKeyDistributionMessage', 'protocolMessage'].includes(mtype)) continue
-                chats.isChats = true
-                const fromMe = message.key.fromMe || areJidsSameUser(chat, conn.user.id)
-                if (!chats.messages) chats.messages = {}
-                if (!fromMe) chats.messages[message.key.id] = JSON.parse(JSON.stringify(message, null, 2))
-            } catch (e) {
-                console.error(e)
-            }
-        }
-    }*/
     
     /**
      * 
@@ -1354,9 +1259,9 @@ conn.setBio = async (status) => {
  * @param {proto.WebMessageInfo} m 
  * @param {Boolean} hasParent 
  */
- exports.smsg = (conn, m, hasParent) => {
+ exports.smsg = (conn, m, hasParent, config) => {
     if (!m) return m
-    let M = proto.WebMessageInfo
+    let M = config.proto.WebMessageInfo
     m = M.fromObject(m)
     if (m.key) {
         m.id = m.key.id
@@ -1364,7 +1269,7 @@ conn.setBio = async (status) => {
         m.chat = conn.decodeJid(m.key.remoteJid || message.message?.senderKeyDistributionMessage?.groupId || '')
         m.isGroup = m.chat.endsWith('@g.us')
         m.sender = conn.decodeJid(m.key.fromMe && conn.user.id || m.participant || m.key.participant || m.chat || '')
-        m.fromMe = m.key.fromMe || areJidsSameUser(m.sender, conn.user.id)
+        m.fromMe = m.key.fromMe || config.areJidsSameUser(m.sender, conn.user.id)
     }
     if (m.message) {
         let mtype = Object.keys(m.message)
@@ -1700,7 +1605,7 @@ exports.protoType = () => {
   }
   String.prototype.decodeJid = function decodeJid() {
     if (/:\d+@/gi.test(this)) {
-      const decode = jidDecode(this) || {}
+      const decode = config.jidDecode(this) || {}
       return (decode.user && decode.server && decode.user + '@' + decode.server || this).trim()
     } else return this.trim()
   }
